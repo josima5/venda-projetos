@@ -9,6 +9,44 @@ const db = admin.firestore();
 // todas as functions desta file na mesma região
 setGlobalOptions({ region: "southamerica-east1" });
 
+/* ===================== C O R S ===================== */
+const ALLOWED_ORIGINS = [
+  process.env.FRONTEND_URL,                           // ex.: https://vendasprojetos.maltaeng1.com.br
+  "https://vendasprojetos.maltaeng1.com.br",
+  "http://localhost:5173",
+].filter(Boolean) as string[];
+
+/**
+ * Aplica CORS e trata preflight (OPTIONS).
+ * Retorna true se já respondeu (preflight), false para seguir o fluxo normal.
+ */
+function applyCors(req: Request, res: Response): boolean {
+  const origin = (req.headers.origin as string) || "";
+  const isAllowed = ALLOWED_ORIGINS.includes(origin);
+
+  if (isAllowed) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  } else {
+    // Se preferir bloquear origens desconhecidas, troque por 403.
+    // res.status(403).send("Origin not allowed");
+    // return true;
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  }
+
+  // Garante comportamento correto de caches/CDN com Vary
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Max-Age", "86400");
+
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return true;
+  }
+  return false;
+}
+/* =================================================== */
+
 /** Tipos do payload (frontend) */
 type PaymentMethod = "pix" | "card" | "boleto";
 type Address = {
@@ -70,6 +108,9 @@ async function upsertCustomerFromPayload(payload: CreatePrefPayload): Promise<st
  */
 export const createMpPreferenceHttp = onRequest(async (req: Request, res: Response): Promise<void> => {
   try {
+    // CORS + preflight
+    if (applyCors(req, res)) return;
+
     if (req.method !== "POST") {
       res.status(405).send("Method Not Allowed");
       return;
