@@ -1,0 +1,154 @@
+https://southamerica-east1-portal-malta.cloudfunctions.net/mpWebhook
+
+
+https://southamerica-east1-portal-malta.cloudfunctions.net/mpWebhook?secret=8977a40cf22ef1131713ca493192d906ee589b4b8133e7a5cf7fb05889d67bff
+
+
+
+curl -X POST "https://mpwebhook-6xhvj572qa-rj.a.run.app?secret=8977a40cf22ef1131713ca493192d906ee589b4b8133e7a5cf7fb05889d67bff ^
+Mais?   -H "Content-Type: application/json" ^
+Mais?   -d "{\"type\":\"payment\",\"data\":{\"id\":\"123\"}}"
+
+
+firebase use portal-malta
+
+firebase login
+
+firebase use portal-malta
+
+
+curl -X POST "https://mpwebhook-6xhvj572qa-rj.a.run.app?secret=8977a40cf22ef1131713ca493192d906ee589b4b8133e7a5cf7fb05889d67bff' -H "Content-Type: application/json" -d "{\"type\":\"payment\",\"data\":{\"id\":\"123\"}}"
+
+
+APP_USR-1679128885481997-082316-db49c7f34516c036be4f8489a0d1b907-728129436
+
+
+echo APP_USR-1679128885481997-082316-db49c7f34516c036be4f8489a0d1b907-728129436 | firebase functions:secrets:set MP_ACCESS_TOKEN --data-file=-
+
+
+firebase functions:secrets:access MP_ACCESS_TOKEN --project portal-malta
+
+npm i -g firebase-tools@latest
+firebase --version
+
+
+
+curl -X POST "https://mpwebhook-6xhvj572qa-rj.a.run.app?secret=8977a40cf22ef1131713ca493192d906ee589b4b8133e7a5cf7fb05889d67bff" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"type\":\"ping\"}"
+
+
+Set-Content -Path mp_token.txt -Value 'APP_USR-1679128885481997-082316-db49c7f34516c036be4f8489a0d1b907-728129436' -NoNewline
+
+
+gcloud secrets versions add 8977a40cf22ef1131713ca493192d906ee589b4b8133e7a5cf7fb05889d67bff --data-file=mp_token.txt --project portal-malta
+
+cmd /c gcloud secrets versions add 8977a40cf22ef1131713ca493192d906ee589b4b8133e7a5cf7fb05889d67bff --data-file=mp_token.txt --project portal-malta
+
+
+powershell -Command "Set-Content -Path mp_token.txt -Value 'APP_USR-1679128885481997-082316-db49c7f34516c036be4f8489a0d1b907-728129436' -NoNewline"
+
+
+powershell -Command "Set-Content -Path $env:TEMP\mp_token.txt -Value 'APP_USR-1679128885481997-082316-db49c7f34516c036be4f8489a0d1b907-728129436' -NoNewline"
+
+
+powershell -Command "Set-Content -Path $env:TEMP\mp_webhook.txt -Value '8977a40cf22ef1131713ca493192d906ee589b4b8133e7a5cf7fb05889d67bff' -NoNewline"
+gcloud secrets versions add MP_WEBHOOK_SECRET --data-file=%TEMP%\mp_webhook.txt --project portal-malta
+del %TEMP%\mp_webhook.txt
+
+
+curl -X POST "https://SEU_HOST/mpWebhook?secret=8977a40cf22ef1131713ca493192d906ee589b4b8133e7a5cf7fb05889d67bff ^
+  -H "Content-Type: application/json" ^
+  -d "{\"type\":\"ping\"}"
+
+
+curl -X POST https://api.mercadopago.com/checkout/preferences \
+  -H "Authorization: Bearer $MP_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '<mesmo JSON do body>'
+
+
+
+gcloud secrets versions add MP_ACCESS_TOKEN --data-file=<(echo -n 'APP_USR-1679128885481997-082316-db49c7f34516c036be4f8489a0d1b907-728129436')
+gcloud secrets versions add FRONTEND_URL   --data-file=<(echo -n 'http://localhost:5173/')
+# opcional
+gcloud secrets versions add MP_WEBHOOK_SECRET --data-file=<(echo -n '8977a40cf22ef1131713ca493192d906ee589b4b8133e7a5cf7fb05889d67bff')
+
+
+
+vamos fazer o seguinte, os códigos devem ser preservado no máximo deles, para ficar algo melhor, abaixo esta o código antigo, você deve acrescentar ou atualizar o código, fazendo que ele funcione de forma perfeita, apresente ele completo com todas as linhas de código 
+
+
+cd functions
+npm i
+npm run build
+npm run deploy
+firebase deploy --only functions
+
+# na raiz do projeto
+cd functions
+npm run build   # se você tiver script build/tsc (se não, `tsc -p .`)
+cd ..
+firebase deploy --only functions
+
+firebase deploy --only firestore:rules
+
+firebase deploy --only storage
+
+
+
+
+Emails collection → mail
+
+Default FROM → Malta Engenharia <pedidos@maltaeng.com.br>
+
+Default REPLY-TO (opcional) → contato@maltaeng.com.br
+
+Authentication Type → Username & Password
+
+SMTP connection URI → smtps://mail.maltaeng.com.br:465
+(não coloque usuário/senha na URI)
+
+SMTP username → pedidos@maltaeng.com.br
+
+SMTP password → pedidos2025
+
+
+como solucionar isso e atualizar o SMTP 
+
+
+:: Na raiz
+npm --prefix functions run build
+firebase use portal-malta
+firebase deploy --only functions:sendTestEmail
+
+
+
+
+npm --prefix functions run build
+
+
+curl -G --data-urlencode "secret=npm --prefix functions run build" ^
+  "https://southamerica-east1-portal-malta.cloudfunctions.net/sendTestEmail"
+
+
+
+curl -G --data-urlencode "secret=pedidos2025" ^
+  "https://southamerica-east1-portal-malta.cloudfunctions.net/sendTestEmail"
+
+
+npm --prefix functions run build
+firebase deploy --only functions
+
+
+
+
+Aplique, sem perguntar, todos os códigos e ajustes que você indicou anteriormente diretamente no código que vou colar; devolva os arquivos resultantes COMPLETOS, cada um precedido do path relativo e com o conteúdo integral (sem trechos omitidos); corrija imports/exports/rotas/tipos para compilar; padronize nomes e evite novas dependências salvo se indispensáveis (se houver, liste os comandos ao final); não explique nem resuma — apenas entregue os arquivos COMPLETOS.
+
+
+Corrija, sem perguntar, todos os erros do código que vou colar (sintaxe, tipos TypeScript, imports/exports, rotas, hooks e estados React, referências/paths quebrados, variáveis não declaradas, null/undefined safety, regras do Firestore inválidas e quaisquer warnings que impeçam build/execução); padronize nomes e removas duplicidades; ajuste configurações mínimas necessárias (tsconfig/eslint) e only se indispensável adicione dependências (liste os comandos ao final); mantenha o comportamento esperado e compatibilidade com a stack existente; devolva os arquivos resultantes COMPLETOS, cada um precedido do path relativo e com o conteúdo integral entre fences da linguagem apropriada (sem trechos omitidos), tudo em português; não explique nem resuma — apenas entregue os arquivos prontos para compilar e executar sem erros.
+
+
+abaixo o codigo antigo para usar como base, aplique as modificações e atualizações nele. apresetne o codigo completo atualizado
+
+

@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* === Tokens do protótipo === */
+:root {
+  --brand-gold: #c5a47e;
+  --brand-gold-dark: #b3916c;
+  --brand-dark: #212121;
+  --brand-light-gold: #fbf8f4;
+  --brand-light-gold-border: #f2e9dd;
+
+  /* Cores de interface */
+  --bg-app: #f8fafc; /* slate-50 */
+  --text-app: #0f172a; /* slate-900 */
+}
+
+/* Base globals (aplicado via Tailwind layer para melhor ordem) */
+@layer base {
+  html, body, #root { height: 100%; }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background: var(--bg-app);
+    color: var(--text-app);
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Imagens responsivas por padrão */
+  img, svg, video, canvas {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Tipografia básica */
+  h1 { @apply text-2xl font-semibold; }
+  h2 { @apply text-xl font-semibold; }
+  h3 { @apply text-lg font-semibold; }
+  p  { @apply leading-relaxed; }
+
+  a { @apply outline-none; }
+  a:focus-visible { @apply ring-2 ring-offset-2 ring-blue-500 rounded; }
+}
+
+/* Utilitários de marca */
+.brand-gold { color: var(--brand-gold); }
+.bg-brand-gold { background-color: var(--brand-gold); }
+.hover\:bg-brand-gold-dark:hover { background-color: var(--brand-gold-dark); }
+.border-brand-gold { border-color: var(--brand-gold); }
+.ring-brand-gold { --tw-ring-color: var(--brand-gold); }
+.text-brand-dark { color: var(--brand-dark); }
+.bg-brand-light-gold { background-color: var(--brand-light-gold); }
+.border-brand-light-gold { border-color: var(--brand-light-gold-border); }
+.hover\:text-brand-gold:hover { color: var(--brand-gold); }
+
+/* Componentes utilitários (podem ser usados em qualquer lugar) */
+@layer components {
+  .card {
+    @apply rounded-2xl border bg-white shadow-sm;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2;
+  }
+  .btn-primary {
+    @apply btn bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-600;
+  }
+  .btn-secondary {
+    @apply btn bg-gray-900 text-white hover:bg-black focus-visible:ring-gray-900;
+  }
+  .btn-outline {
+    @apply btn border hover:bg-gray-50;
+  }
+
+  .nav-link {
+    @apply flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition;
+  }
+  .nav-link-active {
+    @apply bg-blue-600 text-white shadow;
+  }
+
+  .container-proto {
+    @apply mx-auto w-full max-w-7xl px-4;
+  }
+}
+
+/* Animações leves */
+.fade-in { animation: fadeIn .35s ease-in-out; }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Acessibilidade: respeita usuários com redução de movimento */
+@media (prefers-reduced-motion: reduce) {
+  .fade-in { animation: none; }
+}

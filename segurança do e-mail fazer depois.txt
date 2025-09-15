@@ -1,0 +1,9 @@
+Quando der, faça o básico (vale muito a pena)
+
+DKIM: ativar a assinatura no cPanel (gera e publica o TXT).
+
+SPF: 1 registro TXT no domínio com o IP/relay do seu servidor.
+
+DMARC: começar com p=none (só monitorar) e evoluir depois.
+
+Se você quiser, quando tiver acesso ao cPanel completo ou ao painel de DNS, me diga onde está o DNS (cPanel/Cloudflare/Registro.br) e o IP/relay de saída do seu e-mail, que eu te passo os registros prontos para colar.

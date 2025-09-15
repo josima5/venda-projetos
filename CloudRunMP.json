@@ -1,0 +1,139 @@
+{
+  "displayName": "Portal Malta – Cloud Run MP",
+  "mosaicLayout": {
+    "columns": 12,
+    "tiles": [
+      {
+        "x": 0, "y": 0, "width": 6, "height": 4,
+        "widget": {
+          "title": "Requests por classe de resposta (2xx/4xx/5xx)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "plotType": "LINE",
+                "legendTemplate": "{{resource.service_name}} – {{metric.response_code_class}}",
+                "minAlignmentPeriod": "60s",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"run.googleapis.com/request_count\" AND resource.type=\"cloud_run_revision\" AND resource.labels.location=\"southamerica-east1\" AND (resource.labels.service_name=\"creatempreference\" OR resource.labels.service_name=\"creatempreferencehttp\" OR resource.labels.service_name=\"mpwebhook\")",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_RATE",
+                      "crossSeriesReducer": "REDUCE_NONE",
+                      "groupByFields": [
+                        "metric.label.response_code_class",
+                        "resource.label.service_name"
+                      ]
+                    }
+                  }
+                }
+              }
+            ],
+            "yAxis": { "label": "req/s", "scale": "LINEAR" }
+          }
+        }
+      },
+      {
+        "x": 6, "y": 0, "width": 6, "height": 4,
+        "widget": {
+          "title": "Taxa de erro (5xx / total) por serviço",
+          "xyChart": {
+            "dataSets": [
+              {
+                "plotType": "LINE",
+                "legendTemplate": "{{resource.service_name}}",
+                "minAlignmentPeriod": "60s",
+                "timeSeriesQuery": {
+                  "timeSeriesFilterRatio": {
+                    "numerator": {
+                      "filter": "metric.type=\"run.googleapis.com/request_count\" AND resource.type=\"cloud_run_revision\" AND resource.labels.location=\"southamerica-east1\" AND metric.label.response_code_class=\"5xx\" AND (resource.labels.service_name=\"creatempreference\" OR resource.labels.service_name=\"creatempreferencehttp\" OR resource.labels.service_name=\"mpwebhook\")",
+                      "aggregation": {
+                        "alignmentPeriod": "60s",
+                        "perSeriesAligner": "ALIGN_RATE",
+                        "groupByFields": ["resource.label.service_name"]
+                      }
+                    },
+                    "denominator": {
+                      "filter": "metric.type=\"run.googleapis.com/request_count\" AND resource.type=\"cloud_run_revision\" AND resource.labels.location=\"southamerica-east1\" AND (resource.labels.service_name=\"creatempreference\" OR resource.labels.service_name=\"creatempreferencehttp\" OR resource.labels.service_name=\"mpwebhook\")",
+                      "aggregation": {
+                        "alignmentPeriod": "60s",
+                        "perSeriesAligner": "ALIGN_RATE",
+                        "groupByFields": ["resource.label.service_name"]
+                      }
+                    },
+                    "secondaryAggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_MEAN"
+                    }
+                  }
+                }
+              }
+            ],
+            "yAxis": { "label": "erro %", "scale": "LINEAR" }
+          }
+        }
+      },
+      {
+        "x": 0, "y": 4, "width": 6, "height": 4,
+        "widget": {
+          "title": "Requests por serviço",
+          "xyChart": {
+            "dataSets": [
+              {
+                "plotType": "LINE",
+                "legendTemplate": "{{resource.service_name}}",
+                "minAlignmentPeriod": "60s",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"run.googleapis.com/request_count\" AND resource.type=\"cloud_run_revision\" AND resource.labels.location=\"southamerica-east1\" AND (resource.labels.service_name=\"creatempreference\" OR resource.labels.service_name=\"creatempreferencehttp\" OR resource.labels.service_name=\"mpwebhook\")",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_RATE",
+                      "groupByFields": ["resource.label.service_name"]
+                    }
+                  }
+                }
+              }
+            ],
+            "yAxis": { "label": "req/s", "scale": "LINEAR" }
+          }
+        }
+      },
+      {
+        "x": 6, "y": 4, "width": 6, "height": 4,
+        "widget": {
+          "title": "Requests por revisão (últimas 2h)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "plotType": "LINE",
+                "legendTemplate": "{{resource.revision_name}}",
+                "minAlignmentPeriod": "60s",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"run.googleapis.com/request_count\" AND resource.type=\"cloud_run_revision\" AND resource.labels.location=\"southamerica-east1\" AND (resource.labels.service_name=\"creatempreference\" OR resource.labels.service_name=\"creatempreferencehttp\" OR resource.labels.service_name=\"mpwebhook\")",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_RATE",
+                      "groupByFields": ["resource.label.revision_name"]
+                    }
+                  }
+                }
+              }
+            ],
+            "yAxis": { "label": "req/s", "scale": "LINEAR" }
+          }
+        }
+      },
+      {
+        "x": 0, "y": 8, "width": 12, "height": 6,
+        "widget": {
+          "title": "Erros recentes (Logs) – Cloud Run",
+          "logsPanel": {
+            "filter": "resource.type=\"cloud_run_revision\" AND resource.labels.location=\"southamerica-east1\" AND severity>=ERROR AND (resource.labels.service_name=\"creatempreference\" OR resource.labels.service_name=\"creatempreferencehttp\" OR resource.labels.service_name=\"mpwebhook\")"
+          }
+        }
+      }
+    ]
+  }
+}

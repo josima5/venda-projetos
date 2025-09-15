@@ -1,0 +1,160 @@
+ótimo! com o app voltando a renderizar com Tailwind e o roteamento corrigido, segue um plano objetivo (prioridade alta → baixa) com o que fazer agora:
+
+1) Acabar o “Portal do Cliente”
+
+ Dashboard: garantir cards “Ação necessária”, “Últimos pedidos”, “Downloads recentes” puxando do Firestore/Storage.
+
+ Meus Arquivos: consolidar arquivos por projeto (apenas pedidos paid) via filesService.
+
+ Suporte: lista + detalhe (chat) com suporteService.
+
+ PedidoDetalhe: status + itens + downloads quando paid.
+
+ Perfil: dividir em Perfil / Segurança / Endereços (pode começar só com Perfil).
+
+2) Consertos rápidos (já dá pra fazer agora)
+
+ Favicon 404: coloque um favicon.ico em public/ (qualquer ícone por enquanto).
+
+ Botão Sair: use logout() do AuthProvider (você já trocou, mantenha void logout() para não bloquear UI).
+
+ Links do header: só mostrar “Portal” quando user?.emailVerified (já está).
+
+3) Services e regras (segurança)
+Firestore Rules (mínimo seguro)
+
+Crie/atualize firestore.rules:
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+
+    // Pedidos (orders): o usuário só lê os seus
+    match /orders/{orderId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow list: if false; // use queries com where userId == uid
+      allow create, update, delete: if false; // feito pelo backend/admin
+    }
+
+    // Tickets
+    match /tickets/{ticketId} {
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read, update: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      // Mensagens do ticket
+      match /messages/{msgId} {
+        allow create: if isSignedIn()
+                      && exists(/databases/$(database)/documents/tickets/$(ticketId))
+                      && get(/databases/$(database)/documents/tickets/$(ticketId)).data.userId == request.auth.uid
+                      && request.resource.data.senderId == request.auth.uid;
+        allow read: if isSignedIn()
+                    && get(/databases/$(database)/documents/tickets/$(ticketId)).data.userId == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
+    // Settings públicos de marca
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}
+
+Storage Rules (somente leitura de entregáveis dos projetos do usuário)
+
+Em storage.rules:
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() { return request.auth != null; }
+
+    // projects/{projectId}/entregaveis/{arquivo}
+    match /projects/{projectId}/entregaveis/{fileName} {
+      // Só pode baixar se o usuário tiver um order 'paid' para esse projectId
+      allow read: if isSignedIn() && exists(
+        /databases/(default)/documents/orders/(
+          // procura por um documento com esse projectId + userId + status paid
+          // como não dá para query em rules, mantenha um documento "grants"
+          // OU exponha via Cloud Function assinatura temporária.
+          // Solução simples: criar coleção grants/users/{uid}/projects/{projectId}
+          // e checar a existência:
+          "dummy" // placeholder; veja a alternativa abaixo
+        )
+      );
+      // Alternativa simples e eficiente: manter um "grant"
+    }
+
+    // Alternativa recomendada (escala e regras simples):
+    // users/{uid}/projects/{projectId}/grant -> { allowed: true }
+    match /users/{uid}/projects/{projectId}/files/{file=**} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}
+
+
+Obs.: regras do Storage não suportam busca com filtros; para produção, mantenha um “grant” por projeto comprado (ex.: users/{uid}/projects/{projectId}/grant) e sirva os arquivos dentro desse path. Se quiser manter a convenção projects/{projectId}/entregaveis/, gere URLs assinadas por Cloud Function.
+
+4) Indexes do Firestore (para queries que você já usa)
+
+Crie firestore.indexes.json (ou configure no console) para:
+
+{
+  "indexes": [
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tickets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
+
+5) Qualidade / UX
+
+ Skeletons e estados vazios nas páginas do portal (você já começou).
+
+ Toasts simples para erros de rede (sem novas libs → use estado local + banners).
+
+ Acessibilidade: foco visível (já habilitamos no CSS com :focus-visible).
+
+ Responsividade: revisar Sidebar/PortalLayout em md/lg.
+
+6) Build & Deploy
+
+ Configure .env (chaves Firebase) e NUNCA commite as chaves admin.
+
+ Teste prod build:
+
+npm run build
+npm run preview
+
+
+ Deploy (Firebase Hosting, Vercel, Netlify — o que você já usa).
+
+7) Pequenos itens remanescentes
+
+ Logo do header: garanta /public/Malta_logo.svg (e um fallback).
+
+ SEO básico: <title>, <meta name="description">, favicon.ico.
+
+ Rastreio (opcional): GA4, mas só depois de estabilizar.
+
+Se quiser, mando os arquivos de rules/indexes/grants já prontos conforme a estratégia que preferir (Storage por “grant” vs. URL assinada). Também posso ajustar os services (filesService e suporteService) para já respeitarem a convenção de grants no Storage.

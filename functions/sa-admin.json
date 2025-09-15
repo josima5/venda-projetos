@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "portal-malta",
+  "private_key_id": "903f4215ab226d7be4c6973f59a17be54d414ff3",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCuiFhue8/T6TTR\nYO8ZaSPrJe9dRQ7gplGnSI6zGN5Iw6NF5pyoF+9dpPQY2WM9XBwV3ePhLCgtVeok\nOvzfKgjmvPjvuSdWmtNdyEITIaStdN1+gOq6EqUceM/cbgDYds27isMBc43d0vu+\nyDkMK/z8a5/w6BQNQ+vv1lVVISTVGXe6lXMnm8ZDqUCfagXOFkjK7q40UrVImN6D\nPNiT46X14LaTmjLkgtApSfbSjVo2FBzI6sItAWN60s1F6IL77Vb9sUZUEoEC1ix8\n5/YzeRI6J0qklqdXORJzR41OTbDGJ2v6Ty2klffiAM0LBVnFY9A9sBWTsbUXS74M\nY+Fr6ZwxAgMBAAECggEAAdeLz+D+T8333H99QukhhUbKtDyhW3p6SIJYw7MyRt9k\nmlOkp5ZzlIGQ+pY1c+FRMeoI5xB1GgsWGAgEytEasMU4K+idRzuMc4weH7QXLn+2\n3F69adi+ja3iezc28SUaI7j5rB4JWaWWmhqKvBbp6H47o2Jh2LGk1GZAbOAXL3xm\nko8hk9M+CIEog9lho+2P41WkyEPZrkcyRtfmC7o1O1BTGmfV/oW/cqfUa7PFGDp2\n2djMl7WXtWC6DluOSCX61Yd1vRqG0CAmAGP9ExdvZkD1uFATw8fUzU/EjQoNPQYP\nI8FipNjW+scWXgY6/i1PZXUXabHVTWJvhdGx9hujYQKBgQDYKQXZ7SO8j25Sv1l1\nR2u48CYTDB5GO2nW23GcBzyCyYoet2swPaJ5Hag3FFDVfzuzWDwNHu6dxsVBH7uS\n7OeipNJydzXMqj0P1BX+Cw1ydf37gFiBFkwKBPxuFLhReWV9Th7r6/nDJ4quiyPc\nDZyIepUnOSPagErV6Cy7D4Hr4QKBgQDOszoT0egTWM3EpT1ZQjTgIFFkgCXVgTwh\nZYqzTF2la6xUm1sm9TJ9kI94FbMqwtye04TflpIf+StmMIZ7ytdj3rHz7vlWKbVk\npwKgKfiodq/Gc5WRHBrUA81EMDa57cojtK/8fwedbyrjkSlp1uxTWrdz/d4aK53t\nvhBu1/06UQKBgEBSxMj6xj2gOOYqxsYdgLLB07KrUn73wyEKoB4cESeiLZXCYwUx\n8h00dBAf3YYKnItb4FLPN5Z/xccBWGH6WVuOzIj/bGUA67bAF+NHCrNa5T9oC+4t\n4mbA4RUo2Uh1ZXwKOS1fRS2LoLsb8InVCxWZ1LSdTkwBDUPmGRl5HeJBAoGARyC1\no4xf6AhvBnQ2IDkAKP/2Ajd2zXmjT3q5t+lXcE0VCChNvaIytbLBK/mLpfNYJ+9x\nkd8meYosvQWFwaOTavJ/GgnqExRXL0OpS6QlxRLSed/cYArj0IFeaVCOBH0nShIr\nXR/5ZtuSTqztK1aiDCzzZB7ABxFrTxxQW1RH94ECgYEApFTp1ftwue+nRzUdq4y5\ng8uMh96+7KuSbKsWSocipqes32FJqolpO6eFCjFYTCgx+wISnSWZwdDwE/fA9BpW\nVLMrQRWgus37KKoBA3W/xrOj5nqg8a5B4IW0hYN6vGbU1iopY9RRMu5Jih4CZnW2\n8bSy5slhVkuVN5cTPz5BVj4=\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-fbsvc@portal-malta.iam.gserviceaccount.com",
+  "client_id": "112191175184534780980",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40portal-malta.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
