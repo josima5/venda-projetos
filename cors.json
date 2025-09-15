@@ -3,11 +3,13 @@
     "origin": [
       "http://localhost:5173",
       "http://localhost",
+      "https://venda-projetos.vercel.app",
+      "https://vendasprojetos.maltaeng1.com.br",
       "https://portal-malta.web.app",
       "https://portal-malta.firebaseapp.com"
     ],
-    "method": ["GET"],
-    "responseHeader": ["Content-Type", "Authorization"],
+    "method": ["GET", "HEAD", "POST", "PUT", "OPTIONS"],
+    "responseHeader": ["Content-Type", "Authorization", "x-goog-meta-*"],
     "maxAgeSeconds": 3600
   }
 ]

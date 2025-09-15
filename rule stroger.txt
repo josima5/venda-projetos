@@ -1,0 +1,50 @@
+// storage.rules
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ==== helpers extras (não interferem em nada existente) ====
+    function isSignedIn() { return request.auth != null; }
+    function uid()        { return isSignedIn() ? request.auth.uid : ""; }
+    function hasRole(r)   { return isSignedIn() && (request.auth.token.role == r || request.auth.token[r] == true); }
+    function isAdmin()    { return isSignedIn() && (hasRole("admin") || request.auth.token.email == "jaf.contatoeng@gmail.com"); }
+    function isStaff()    { return isAdmin() || hasRole("finance") || hasRole("sales") || hasRole("viewer"); }
+
+    // Público (marca/imagens do site)
+    match /branding/{all=**} {
+      allow read: if true;
+    }
+
+    // Avatares: dono pode gravar e qualquer um pode ler para exibir a foto
+    match /users/{uid}/{all=**} {
+      allow read:  if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Entregáveis: usuário autenticado pode listar/baixar
+    // 🔁 INCREMENTO: staff/admin pode fazer upload direto pelo painel
+    match /projects/{projectId}/entregaveis/{all=**} {
+      allow read, list: if request.auth != null;
+      allow write: if isStaff(); // (antes: false) — compatível e mais permissivo só para staff
+    }
+
+    // Pasta dedicada do Portal do Cliente (isolada por usuário)
+    // 🔁 INCREMENTO: staff/admin pode fazer upload direto pelo painel
+    match /portal/{uid}/{all=**} {
+      allow read, list: if request.auth != null && request.auth.uid == uid;
+      allow write: if isStaff(); // (antes: false) — permite painel/admin enviar arquivos
+    }
+
+    // (OPCIONAL) Controle de listagem por prefixo para listAll/nextPage
+    match /{anyPath=**} {
+      allow list: if request.auth != null
+        && (
+          request.resource.prefix.matches('projects/[^/]+/entregaveis(/.*)?')
+          || request.resource.prefix.matches('portal/' + request.auth.uid + '(/.*)?')
+        );
+    }
+
+    // Negar o resto
+    match /{path=**} { allow read, write: if false; }
+  }
+}

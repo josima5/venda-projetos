@@ -1,0 +1,161 @@
+// firestore.rules
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==== helpers ====
+    function isSignedIn() { return request.auth != null; }
+    function uid()        { return isSignedIn() ? request.auth.uid : ""; }
+    function hasRole(r)   { return isSignedIn() && (request.auth.token.role == r || request.auth.token[r] == true); }
+    function isAdmin()    { return isSignedIn() && (hasRole("admin") || request.auth.token.email == "jaf.contatoeng@gmail.com"); }
+    function isStaff()    { return isAdmin() || hasRole("finance") || hasRole("sales") || hasRole("viewer"); }
+    function isOwner(userId) { return isSignedIn() && userId == uid(); }
+    function isOwnerOfResourceBy(field) { return isSignedIn() && resource.data[field] == uid(); }
+    function onlyChangesAllowed(allowed) { let d = request.resource.data.diff(resource.data); return d.changedKeys().hasOnly(allowed); }
+    function isString(v)    { return v is string && v.size() <= 20000; }
+    function isTimestamp(v) { return v is timestamp; }
+
+    /* -------------------- Site / Catálogo (público) -------------------- */
+    match /projects/{docId}      { allow read: if true; allow create, update, delete: if isAdmin(); }
+    match /site/{docId}          { allow read: if true; allow write: if isAdmin(); }
+
+    /* -------------------- Settings -------------------- */
+    match /settings/company      { allow read: if true; allow write: if isAdmin(); }
+    match /settings/{docId}      { allow read: if isStaff(); allow write: if isAdmin(); }
+
+    /* -------------------- Perfis -------------------- */
+    match /userProfiles/{userId} {
+      allow read:   if isOwner(userId) || isStaff();
+      allow create: if isOwner(userId)
+        && request.resource.data.uid == userId
+        && isTimestamp(request.resource.data.createdAt)
+        && isTimestamp(request.resource.data.updatedAt);
+      allow update: if (
+        isOwner(userId)
+        && onlyChangesAllowed(['name','displayName','photoURL','phone','updatedAt'])
+        && (!('name' in request.resource.data)        || isString(request.resource.data.name))
+        && (!('displayName' in request.resource.data) || isString(request.resource.data.displayName))
+        && (!('photoURL' in request.resource.data)    || isString(request.resource.data.photoURL))
+        && (!('phone' in request.resource.data)       || isString(request.resource.data.phone))
+        && (!('updatedAt' in request.resource.data)   || isTimestamp(request.resource.data.updatedAt))
+      ) || isStaff();
+      allow delete: if isAdmin();
+    }
+
+    // Compat para apps que ainda usam /users/{uid}
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    /* -------------------- Pedidos -------------------- */
+    match /orders/{orderId} {
+      allow read: if isStaff() || isOwnerOfResourceBy('customerUid') || isOwnerOfResourceBy('userId');
+      allow create, update, delete: if isAdmin();
+
+      // staff pode atualizar apenas 'invoice' e 'updatedAt'
+      allow update: if isStaff()
+        && onlyChangesAllowed(['invoice','updatedAt'])
+        && (!('updatedAt' in request.resource.data) || isTimestamp(request.resource.data.updatedAt))
+        && (!('invoice' in request.resource.data) || (
+             (request.resource.data.invoice.status is string &&
+              request.resource.data.invoice.status.size() <= 20)
+             && (!('number' in request.resource.data.invoice)
+                 || (request.resource.data.invoice.number is string
+                     && request.resource.data.invoice.number.size() <= 100))
+           ));
+    }
+
+    /* -------------------- Clientes -------------------- */
+    match /customers/{customerId} {
+      allow read: if isStaff()
+               || isOwner(customerId)
+               || isOwnerOfResourceBy('uid')
+               || isOwnerOfResourceBy('customerUid');
+
+      allow update: if isStaff() || (
+        isOwner(customerId) &&
+        onlyChangesAllowed([
+          'name','phone','displayName',
+          'zip','zipcode','cep',
+          'street','number','complement',
+          'district','neighborhood','city','state','uf',
+          'updatedAt'
+        ]) &&
+        (!('displayName' in request.resource.data) || isString(request.resource.data.displayName)) &&
+        (!('name' in request.resource.data)        || isString(request.resource.data.name)) &&
+        (!('phone' in request.resource.data)       || isString(request.resource.data.phone)) &&
+        (!('zip' in request.resource.data)         || isString(request.resource.data.zip)) &&
+        (!('zipcode' in request.resource.data)     || isString(request.resource.data.zipcode)) &&
+        (!('cep' in request.resource.data)         || isString(request.resource.data.cep)) &&
+        (!('street' in request.resource.data)      || isString(request.resource.data.street)) &&
+        (!('number' in request.resource.data)      || isString(request.resource.data.number)) &&
+        (!('complement' in request.resource.data)  || isString(request.resource.data.complement)) &&
+        (!('district' in request.resource.data)    || isString(request.resource.data.district)) &&
+        (!('neighborhood' in request.resource.data)|| isString(request.resource.data.neighborhood)) &&
+        (!('city' in request.resource.data)        || isString(request.resource.data.city)) &&
+        (!('state' in request.resource.data)       || isString(request.resource.data.state)) &&
+        (!('uf' in request.resource.data)          || isString(request.resource.data.uf)) &&
+        (!('updatedAt' in request.resource.data)   || isTimestamp(request.resource.data.updatedAt))
+      );
+
+      allow create: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    /* -------------------- Formulários de entrega -------------------- */
+    match /deliveryForms/{formId} {
+      allow read:           if isStaff() || isOwnerOfResourceBy('customerUid');
+      allow create:         if isSignedIn() && request.resource.data.customerUid == uid();
+      allow update, delete: if isStaff() || isOwnerOfResourceBy('customerUid');
+    }
+
+    /* -------------------- Suporte (Portal do Cliente) -------------------- */
+    match /supportTickets/{ticketId} {
+      allow read:           if isStaff() || isOwnerOfResourceBy('customerUid');
+      allow create:         if isSignedIn() && request.resource.data.customerUid == uid();
+      allow update, delete: if isStaff() || isOwnerOfResourceBy('customerUid');
+
+      // ✅ Mensagens: permitem leitura ao STAFF ou ao DONO do ticket (customerUid),
+      // além do autor da própria mensagem. Isto evita o permission-denied nas queries.
+      match /messages/{messageId} {
+        allow read: if isStaff()
+          || (isSignedIn() && (
+                isOwnerOfResourceBy('senderId') ||
+                get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.customerUid == uid()
+             ));
+
+        // opcionalmente permite staff criar mensagens mesmo que 'senderId' não seja exatamente o seu uid
+        allow create: if isSignedIn() && (
+            request.resource.data.senderId == uid() || isStaff()
+        );
+
+        allow update, delete: if isStaff();
+      }
+    }
+
+    /* -------------------- deliveryAccess (opcional) -------------------- */
+    match /deliveryAccess/{projectId} {
+      allow read, write: if isStaff();
+      match /users/{userId} {
+        allow read: if isOwner(userId) || isStaff();
+        allow create, update, delete: if isStaff();
+      }
+    }
+
+    /* -------------------- Mail (extensão) -------------------- */
+    match /mail/{docId} {
+      allow create: if isStaff();
+      allow read, update, delete: if false;
+    }
+
+    /* -------------------- Auditoria -------------------- */
+    match /audit/{logId} {
+      allow read:   if isStaff();
+      allow create: if isStaff();
+      allow update, delete: if isAdmin();
+    }
+
+    /* -------------------- Negar o restante -------------------- */
+    match /{document=**} { allow read, write: if false; }
+  }
+}
