@@ -1,31 +1,35 @@
 /**
  * Firebase Functions Gen-2 + Mercado Pago + E-mails (Trigger Email)
  * Região: southamerica-east1
- * Secrets necessários:
+ * Secrets:
  *  - MP_ACCESS_TOKEN
  *  - FRONTEND_URL
  *  - MP_WEBHOOK_SECRET
  *  - TEST_EMAIL_SECRET (opcional)
  *  - ADMIN_FIX_EMAIL_SECRET (opcional)
  *  - LOGO_URL
+ *
+ * Observações:
+ *  - Não enviamos e-mail inline ao criar preferência (evita duplicidade).
+ *  - Usamos ADC (Application Default Credentials) por padrão.
  */
 
-import "./admin";
+import { initializeApp, getApps, applicationDefault } from "firebase-admin/app";
+import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { onRequest } from "firebase-functions/v2/https";
-import { defineSecret } from "firebase-functions/params";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import {
-  getFirestore,
-  FieldValue,
-  Timestamp,
-} from "firebase-admin/firestore";
-import { getAuth } from "firebase-admin/auth";
+import { defineSecret } from "firebase-functions/params";
 
-// Triggers extras
-export { onOrderStatusWritten } from "./triggers/orders";
+/* -------------------- Admin SDK (ADC) -------------------- */
+if (getApps().length === 0) {
+  initializeApp({ credential: applicationDefault() });
+}
+const db = getFirestore();
 
+/* -------------------- Global opts -------------------- */
 const REGION = "southamerica-east1";
 setGlobalOptions({
   region: REGION,
@@ -35,8 +39,6 @@ setGlobalOptions({
   maxInstances: 3,
   minInstances: 0,
 });
-
-const db = getFirestore();
 
 /* -------------------- Secrets -------------------- */
 const MP_ACCESS_TOKEN        = defineSecret("MP_ACCESS_TOKEN");
@@ -95,15 +97,24 @@ function splitBRPhone(raw?: string) {
   return { area_code: clean.slice(0, 2), number: clean.slice(2) };
 }
 
-/** CORS com opção de credentials */
+/** CORS com opção de credentials (evita wildcard quando há credenciais) */
 function setCors(req: any, res: any, allowedOrigins: string[], withCredentials = false): boolean {
   const origin = String(req.headers.origin || "");
-  const allow = allowedOrigins.includes(origin) ? origin : allowedOrigins[0] || "*";
+  const allow = allowedOrigins.includes(origin) ? origin : null;
+
+  if (!allow) {
+    // mais seguro bloquear do que cair em "*"
+    res.set("Vary", "Origin");
+    res.status(403).send("Origin not allowed");
+    return true;
+  }
+
   res.set("Access-Control-Allow-Origin", allow);
   res.set("Vary", "Origin");
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
   if (withCredentials) res.set("Access-Control-Allow-Credentials", "true");
+
   if (req.method === "OPTIONS") { res.status(204).end(); return true; }
   return false;
 }
@@ -122,6 +133,7 @@ function buildPaymentMethods(chosen: PaymentMethod | undefined, installments: nu
   }
   return pm;
 }
+
 async function getUidFromAuthHeader(req: any): Promise<string | null> {
   try {
     const auth = String(req.headers?.authorization || "");
@@ -313,8 +325,7 @@ export const createMpPreferenceHttp = onRequest(
   async (req, res) => {
     try {
       const frontend = readSecret(FRONTEND_URL) || "https://example.com";
-      const logo = readSecret(LOGO_URL) || "";
-      const allowed = [frontend, "http://localhost:5173", "http://127.0.0.1:5173"];
+      const allowed  = [frontend, "http://localhost:5173", "http://127.0.0.1:5173"];
       if (setCors(req, res, allowed)) return;
       if (req.method !== "POST") { res.status(405).json({ error: "method_not_allowed" }); return; }
 
@@ -374,20 +385,7 @@ export const createMpPreferenceHttp = onRequest(
         },
       });
 
-      // E-mail: Pedido recebido (idempotente pelo gatilho, mas enviamos inline também)
-      try {
-        const to = String((customer as any)?.email || "");
-        if (to) {
-          const html = renderPendingEmailHTML({
-            orderId: orderRef.id,
-            projectTitle: String(proj.title ?? ""),
-            total,
-            frontendUrl: frontend,
-            logoUrl: logo,
-          });
-          await queueEmail({ to, subject: `Pedido recebido • #${orderRef.id}`, html });
-        }
-      } catch (e) { console.warn("email pending inline falhou:", (e as any)?.message || e); }
+      // ⚠️ NÃO enviamos e-mail inline aqui — o gatilho onOrderWrite cuida disso.
 
       const { MercadoPagoConfig, Preference } = await getMp();
       const client = new MercadoPagoConfig({ accessToken: token, options: { timeout: 10_000 } });
@@ -457,7 +455,6 @@ export const cancelOrderHttp = onRequest(
     try {
       const frontend = readSecret(FRONTEND_URL) || "https://example.com";
       const allowed = [frontend, "http://localhost:5173", "http://127.0.0.1:5173"];
-      // usa credentials (para compatibilidade com o frontend atual)
       if (setCors(req, res, allowed, true)) return;
 
       if (req.method !== "POST") {
@@ -582,7 +579,7 @@ export const mpWebhook = onRequest(
 );
 
 /* ============================================================
-   3) Pós-pagamento: gatilho de e-mails (mantido como onOrderWrite)
+   3) Pós-pagamento: e-mails por gatilho (e flags idempotentes)
    ============================================================ */
 export const onOrderWrite = onDocumentWritten(
   { document: "orders/{orderId}", region: REGION, secrets: [FRONTEND_URL, LOGO_URL] },
@@ -595,7 +592,7 @@ export const onOrderWrite = onDocumentWritten(
     const beforeStatus: OrderStatus | undefined = before?.status;
     const afterStatus:  OrderStatus | undefined = after?.status;
 
-    // marcações idempotentes
+    // marcação idempotente ao mudar para "paid"
     if (beforeStatus !== "paid" && afterStatus === "paid" && !after?.postProcess?.paidHandled) {
       const docRef = db.collection("orders").doc(orderId);
       await db.runTransaction(async (t) => {
@@ -931,5 +928,74 @@ export const sendTestEmail = onRequest(
       console.error("sendTestEmail error:", e?.message || e);
       res.status(500).send(e?.message || "error");
     }
+  }
+);
+
+/* =========================================================
+   8) Agregação de cliente / customers (gatilho separado)
+   ========================================================= */
+export const onOrderStatusWritten = onDocumentWritten(
+  { document: "orders/{orderId}", region: REGION },
+  async (event) => {
+    const orderId = event.params.orderId as string;
+    const before = (event.data?.before?.data() as any) || null;
+    const after = (event.data?.after?.data() as any) || null;
+    if (!after) return;
+
+    const cust = after.customer || {};
+    const email = String(cust.email || "").trim().toLowerCase();
+    const phone = String(cust.phone || "").replace(/\D/g, "");
+    const customerId = after.customerId || (email ? `email:${email}` : phone ? `phone:${phone}` : null);
+    if (!customerId) return;
+
+    const custId = String(customerId).replace(/[^a-z0-9:_-]/gi, "_");
+    const custRef = db.collection("customers").doc(custId);
+
+    const becamePaid =
+      before?.status !== "paid" &&
+      after?.status === "paid" &&
+      !after?.postProcess?.aggPaidCounted;
+
+    await db.runTransaction(async (t) => {
+      const snap = await t.get(custRef);
+      const cur = (snap.exists ? snap.data() : {}) as any;
+
+      const addr = cust.address || {};
+      const patch: any = {
+        name: String(cust.name || cur?.name || ""),
+        email: email || cur?.email || null,
+        phone: phone || cur?.phone || null,
+        taxId: String(cust.taxId || cur?.taxId || "").replace(/\D/g, "") || null,
+        address: {
+          zip: String(addr.zip || cur?.address?.zip || "").replace(/\D/g, "") || null,
+          street: addr.street ?? cur?.address?.street ?? null,
+          number: addr.number ?? cur?.address?.number ?? null,
+          complement: addr.complement ?? cur?.address?.complement ?? null,
+          district: addr.district ?? cur?.address?.district ?? null,
+          city: addr.city ?? cur?.address?.city ?? null,
+          state: addr.state ?? cur?.address?.state ?? null,
+        },
+        updatedAt: FieldValue.serverTimestamp(),
+        createdAt: cur?.createdAt || FieldValue.serverTimestamp(),
+      };
+
+      if (becamePaid) {
+        patch.ordersCount = FieldValue.increment(1);
+        const amount = Number(after?.payment?.amount || after?.total || 0);
+        patch.totalSpent = FieldValue.increment(amount);
+        patch.lastOrderAt = FieldValue.serverTimestamp();
+      }
+
+      t.set(custRef, patch, { merge: true });
+
+      const post = { ...(after?.postProcess ?? {}), customerLinked: true, customerRef: custId };
+      if (becamePaid) (post as any).aggPaidCounted = true;
+
+      t.set(
+        db.collection("orders").doc(orderId),
+        { postProcess: post, updatedAt: FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+    });
   }
 );

@@ -2,13 +2,17 @@
 /**
  * Firebase Functions Gen-2 + Mercado Pago + E-mails (Trigger Email)
  * Região: southamerica-east1
- * Secrets necessários:
+ * Secrets:
  *  - MP_ACCESS_TOKEN
  *  - FRONTEND_URL
  *  - MP_WEBHOOK_SECRET
  *  - TEST_EMAIL_SECRET (opcional)
  *  - ADMIN_FIX_EMAIL_SECRET (opcional)
  *  - LOGO_URL
+ *
+ * Observações:
+ *  - Não enviamos e-mail inline ao criar preferência (evita duplicidade).
+ *  - Usamos ADC (Application Default Credentials) por padrão.
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -44,18 +48,21 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendTestEmail = exports.forceSendPaidEmail = exports.fixMissingPaidEmails = exports.reconcileMpPendingOrders = exports.onOrderWrite = exports.mpWebhook = exports.cancelOrderHttp = exports.createMpPreferenceHttp = exports.onOrderStatusWritten = void 0;
-require("./admin");
+exports.onOrderStatusWritten = exports.sendTestEmail = exports.forceSendPaidEmail = exports.fixMissingPaidEmails = exports.reconcileMpPendingOrders = exports.onOrderWrite = exports.mpWebhook = exports.cancelOrderHttp = exports.createMpPreferenceHttp = void 0;
+const app_1 = require("firebase-admin/app");
+const firestore_1 = require("firebase-admin/firestore");
+const auth_1 = require("firebase-admin/auth");
 const v2_1 = require("firebase-functions/v2");
 const https_1 = require("firebase-functions/v2/https");
-const params_1 = require("firebase-functions/params");
-const firestore_1 = require("firebase-functions/v2/firestore");
+const firestore_2 = require("firebase-functions/v2/firestore");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
-const firestore_2 = require("firebase-admin/firestore");
-const auth_1 = require("firebase-admin/auth");
-// Triggers extras
-var orders_1 = require("./triggers/orders");
-Object.defineProperty(exports, "onOrderStatusWritten", { enumerable: true, get: function () { return orders_1.onOrderStatusWritten; } });
+const params_1 = require("firebase-functions/params");
+/* -------------------- Admin SDK (ADC) -------------------- */
+if ((0, app_1.getApps)().length === 0) {
+    (0, app_1.initializeApp)({ credential: (0, app_1.applicationDefault)() });
+}
+const db = (0, firestore_1.getFirestore)();
+/* -------------------- Global opts -------------------- */
 const REGION = "southamerica-east1";
 (0, v2_1.setGlobalOptions)({
     region: REGION,
@@ -65,7 +72,6 @@ const REGION = "southamerica-east1";
     maxInstances: 3,
     minInstances: 0,
 });
-const db = (0, firestore_2.getFirestore)();
 /* -------------------- Secrets -------------------- */
 const MP_ACCESS_TOKEN = (0, params_1.defineSecret)("MP_ACCESS_TOKEN");
 const FRONTEND_URL = (0, params_1.defineSecret)("FRONTEND_URL");
@@ -116,10 +122,16 @@ function splitBRPhone(raw) {
         return null;
     return { area_code: clean.slice(0, 2), number: clean.slice(2) };
 }
-/** CORS com opção de credentials */
+/** CORS com opção de credentials (evita wildcard quando há credenciais) */
 function setCors(req, res, allowedOrigins, withCredentials = false) {
     const origin = String(req.headers.origin || "");
-    const allow = allowedOrigins.includes(origin) ? origin : allowedOrigins[0] || "*";
+    const allow = allowedOrigins.includes(origin) ? origin : null;
+    if (!allow) {
+        // mais seguro bloquear do que cair em "*"
+        res.set("Vary", "Origin");
+        res.status(403).send("Origin not allowed");
+        return true;
+    }
     res.set("Access-Control-Allow-Origin", allow);
     res.set("Vary", "Origin");
     res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -309,7 +321,7 @@ async function queueEmail(args) {
         from: args.from ?? "Malta Engenharia <pedidos@maltaeng.com.br>",
         replyTo: args.replyTo ?? "Malta Engenharia <pedidos@maltaeng.com.br>",
         message: { subject: args.subject, html: args.html },
-        createdAt: firestore_2.FieldValue.serverTimestamp(),
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
     };
     if (args.cc?.length)
         doc.cc = args.cc;
@@ -323,7 +335,6 @@ async function queueEmail(args) {
 exports.createMpPreferenceHttp = (0, https_1.onRequest)({ secrets: [MP_ACCESS_TOKEN, FRONTEND_URL, MP_WEBHOOK_SECRET, LOGO_URL] }, async (req, res) => {
     try {
         const frontend = readSecret(FRONTEND_URL) || "https://example.com";
-        const logo = readSecret(LOGO_URL) || "";
         const allowed = [frontend, "http://localhost:5173", "http://127.0.0.1:5173"];
         if (setCors(req, res, allowed))
             return;
@@ -376,7 +387,7 @@ exports.createMpPreferenceHttp = (0, https_1.onRequest)({ secrets: [MP_ACCESS_TO
             customerUid: uid ?? null,
             customerId: customerId ?? null,
             status: "pending",
-            createdAt: firestore_2.FieldValue.serverTimestamp(),
+            createdAt: firestore_1.FieldValue.serverTimestamp(),
             customer: {
                 name: String(customer?.name ?? ""),
                 email: String(customer?.email ?? ""),
@@ -387,23 +398,7 @@ exports.createMpPreferenceHttp = (0, https_1.onRequest)({ secrets: [MP_ACCESS_TO
                 installments: Number(payment?.installments ?? 1),
             },
         });
-        // E-mail: Pedido recebido (idempotente pelo gatilho, mas enviamos inline também)
-        try {
-            const to = String(customer?.email || "");
-            if (to) {
-                const html = renderPendingEmailHTML({
-                    orderId: orderRef.id,
-                    projectTitle: String(proj.title ?? ""),
-                    total,
-                    frontendUrl: frontend,
-                    logoUrl: logo,
-                });
-                await queueEmail({ to, subject: `Pedido recebido • #${orderRef.id}`, html });
-            }
-        }
-        catch (e) {
-            console.warn("email pending inline falhou:", e?.message || e);
-        }
+        // ⚠️ NÃO enviamos e-mail inline aqui — o gatilho onOrderWrite cuida disso.
         const { MercadoPagoConfig, Preference } = await getMp();
         const client = new MercadoPagoConfig({ accessToken: token, options: { timeout: 10000 } });
         const webhookSecret = readSecret(MP_WEBHOOK_SECRET);
@@ -444,7 +439,7 @@ exports.createMpPreferenceHttp = (0, https_1.onRequest)({ secrets: [MP_ACCESS_TO
             prefRes?.point_of_interaction?.transaction_data?.ticket_url ||
             "";
         const preferenceId = String(prefRes?.id || "");
-        await orderRef.set({ preferenceId, "payment.init_point": initPoint, updatedAt: firestore_2.FieldValue.serverTimestamp() }, { merge: true });
+        await orderRef.set({ preferenceId, "payment.init_point": initPoint, updatedAt: firestore_1.FieldValue.serverTimestamp() }, { merge: true });
         res.status(200).json({ orderId, init_point: initPoint, preferenceId });
     }
     catch (err) {
@@ -459,7 +454,6 @@ exports.cancelOrderHttp = (0, https_1.onRequest)({ secrets: [FRONTEND_URL] }, as
     try {
         const frontend = readSecret(FRONTEND_URL) || "https://example.com";
         const allowed = [frontend, "http://localhost:5173", "http://127.0.0.1:5173"];
-        // usa credentials (para compatibilidade com o frontend atual)
         if (setCors(req, res, allowed, true))
             return;
         if (req.method !== "POST") {
@@ -497,7 +491,7 @@ exports.cancelOrderHttp = (0, https_1.onRequest)({ secrets: [FRONTEND_URL] }, as
         }
         await ref.update({
             status: "canceled",
-            updatedAt: firestore_2.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
         });
         res.status(200).json({ ok: true });
     }
@@ -549,7 +543,7 @@ exports.mpWebhook = (0, https_1.onRequest)({ secrets: [MP_ACCESS_TOKEN, MP_WEBHO
         const paymentMethod = String(p.payment_method_id || "");
         const installments = Number(p.installments || 0);
         const amount = Number(p.transaction_amount || 0);
-        const paidAt = p.date_approved ? firestore_2.Timestamp.fromDate(new Date(p.date_approved)) : undefined;
+        const paidAt = p.date_approved ? firestore_1.Timestamp.fromDate(new Date(p.date_approved)) : undefined;
         if (!externalRef) {
             res.status(200).send("No external_reference");
             return;
@@ -571,8 +565,8 @@ exports.mpWebhook = (0, https_1.onRequest)({ secrets: [MP_ACCESS_TOKEN, MP_WEBHO
             "payment.paymentMethod": paymentMethod,
             "payment.installments": installments,
             "payment.amount": amount,
-            "payment.paidAt": paidAt ?? firestore_2.FieldValue.delete(),
-            updatedAt: firestore_2.FieldValue.serverTimestamp(),
+            "payment.paidAt": paidAt ?? firestore_1.FieldValue.delete(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
         res.status(200).send("OK");
     }
@@ -582,9 +576,9 @@ exports.mpWebhook = (0, https_1.onRequest)({ secrets: [MP_ACCESS_TOKEN, MP_WEBHO
     }
 });
 /* ============================================================
-   3) Pós-pagamento: gatilho de e-mails (mantido como onOrderWrite)
+   3) Pós-pagamento: e-mails por gatilho (e flags idempotentes)
    ============================================================ */
-exports.onOrderWrite = (0, firestore_1.onDocumentWritten)({ document: "orders/{orderId}", region: REGION, secrets: [FRONTEND_URL, LOGO_URL] }, async (event) => {
+exports.onOrderWrite = (0, firestore_2.onDocumentWritten)({ document: "orders/{orderId}", region: REGION, secrets: [FRONTEND_URL, LOGO_URL] }, async (event) => {
     const before = event.data?.before?.data();
     const after = event.data?.after?.data();
     const orderId = event.params.orderId;
@@ -592,7 +586,7 @@ exports.onOrderWrite = (0, firestore_1.onDocumentWritten)({ document: "orders/{o
         return;
     const beforeStatus = before?.status;
     const afterStatus = after?.status;
-    // marcações idempotentes
+    // marcação idempotente ao mudar para "paid"
     if (beforeStatus !== "paid" && afterStatus === "paid" && !after?.postProcess?.paidHandled) {
         const docRef = db.collection("orders").doc(orderId);
         await db.runTransaction(async (t) => {
@@ -602,19 +596,19 @@ exports.onOrderWrite = (0, firestore_1.onDocumentWritten)({ document: "orders/{o
                 return;
             t.set(docRef, {
                 postProcess: { ...(cur?.postProcess ?? {}), paidHandled: true, emailPaidQueued: cur?.postProcess?.emailPaidQueued ?? false },
-                paidAt: cur?.paidAt ?? firestore_2.FieldValue.serverTimestamp(),
+                paidAt: cur?.paidAt ?? firestore_1.FieldValue.serverTimestamp(),
                 fulfillment: {
                     ...(cur?.fulfillment ?? {}),
                     released: true,
-                    releasedAt: cur?.fulfillment?.releasedAt ?? firestore_2.FieldValue.serverTimestamp(),
+                    releasedAt: cur?.fulfillment?.releasedAt ?? firestore_1.FieldValue.serverTimestamp(),
                 },
-                statusHistory: firestore_2.FieldValue.arrayUnion({
-                    at: firestore_2.FieldValue.serverTimestamp(),
+                statusHistory: firestore_1.FieldValue.arrayUnion({
+                    at: firestore_1.FieldValue.serverTimestamp(),
                     from: beforeStatus ?? null,
                     to: afterStatus,
                     reason: "post-payment-processor",
                 }),
-                updatedAt: firestore_2.FieldValue.serverTimestamp(),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
             }, { merge: true });
         });
     }
@@ -623,7 +617,7 @@ exports.onOrderWrite = (0, firestore_1.onDocumentWritten)({ document: "orders/{o
     async function markFlag(flag) {
         await db.collection("orders").doc(orderId).set({
             postProcess: { ...(after?.postProcess ?? {}), [flag]: true },
-            updatedAt: firestore_2.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
     }
     // pending -> e-mail (uma vez)
@@ -718,7 +712,7 @@ exports.reconcileMpPendingOrders = (0, scheduler_1.onSchedule)({
         console.error("Reconciliação abortada: MP token ausente");
         return;
     }
-    const cutoff = firestore_2.Timestamp.fromDate(new Date(Date.now() - RECONCILE_MIN_AGE_MIN * 60000));
+    const cutoff = firestore_1.Timestamp.fromDate(new Date(Date.now() - RECONCILE_MIN_AGE_MIN * 60000));
     const qsnap = await db.collection("orders")
         .where("status", "==", "pending")
         .where("createdAt", "<", cutoff)
@@ -737,7 +731,7 @@ exports.reconcileMpPendingOrders = (0, scheduler_1.onSchedule)({
             const paymentMethod = String(p.payment_method_id || "");
             const installments = Number(p.installments || 0);
             const amount = Number(p.transaction_amount || 0);
-            const paidAt = p.date_approved ? firestore_2.Timestamp.fromDate(new Date(p.date_approved)) : undefined;
+            const paidAt = p.date_approved ? firestore_1.Timestamp.fromDate(new Date(p.date_approved)) : undefined;
             let newStatus = "pending";
             if (statusMp === "approved")
                 newStatus = "paid";
@@ -756,8 +750,8 @@ exports.reconcileMpPendingOrders = (0, scheduler_1.onSchedule)({
                     "payment.paymentMethod": paymentMethod,
                     "payment.installments": installments,
                     "payment.amount": amount,
-                    "payment.paidAt": paidAt ?? firestore_2.FieldValue.delete(),
-                    updatedAt: firestore_2.FieldValue.serverTimestamp(),
+                    "payment.paidAt": paidAt ?? firestore_1.FieldValue.delete(),
+                    updatedAt: firestore_1.FieldValue.serverTimestamp(),
                 }, { merge: true });
             }
         }
@@ -805,7 +799,7 @@ exports.fixMissingPaidEmails = (0, scheduler_1.onSchedule)({
             await queueEmail({ to, subject: `Pagamento aprovado • Pedido #${id}`, html });
             await db.collection("orders").doc(id).set({
                 postProcess: { ...(o.postProcess ?? {}), emailPaidQueued: true },
-                updatedAt: firestore_2.FieldValue.serverTimestamp(),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
             }, { merge: true });
         }
         catch (e) {
@@ -855,7 +849,7 @@ exports.forceSendPaidEmail = (0, https_1.onRequest)({ secrets: [FRONTEND_URL, AD
             return;
         }
         if (String(data.status) !== "paid" && String(req.query.force || "") === "1") {
-            await db.collection("orders").doc(id).set({ status: "paid", updatedAt: firestore_2.FieldValue.serverTimestamp() }, { merge: true });
+            await db.collection("orders").doc(id).set({ status: "paid", updatedAt: firestore_1.FieldValue.serverTimestamp() }, { merge: true });
             data = (await db.collection("orders").doc(id).get()).data() || data;
         }
         if (String(data.status) !== "paid") {
@@ -879,7 +873,7 @@ exports.forceSendPaidEmail = (0, https_1.onRequest)({ secrets: [FRONTEND_URL, AD
         await queueEmail({ to, subject: `Pagamento aprovado • Pedido #${id}`, html });
         await db.collection("orders").doc(id).set({
             postProcess: { ...(data.postProcess ?? {}), emailPaidQueued: true },
-            updatedAt: firestore_2.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
         }, { merge: true });
         res.status(200).send(`ok: queued email for ${id}`);
     }
@@ -914,4 +908,58 @@ exports.sendTestEmail = (0, https_1.onRequest)({ secrets: [TEST_EMAIL_SECRET, LO
         console.error("sendTestEmail error:", e?.message || e);
         res.status(500).send(e?.message || "error");
     }
+});
+/* =========================================================
+   8) Agregação de cliente / customers (gatilho separado)
+   ========================================================= */
+exports.onOrderStatusWritten = (0, firestore_2.onDocumentWritten)({ document: "orders/{orderId}", region: REGION }, async (event) => {
+    const orderId = event.params.orderId;
+    const before = event.data?.before?.data() || null;
+    const after = event.data?.after?.data() || null;
+    if (!after)
+        return;
+    const cust = after.customer || {};
+    const email = String(cust.email || "").trim().toLowerCase();
+    const phone = String(cust.phone || "").replace(/\D/g, "");
+    const customerId = after.customerId || (email ? `email:${email}` : phone ? `phone:${phone}` : null);
+    if (!customerId)
+        return;
+    const custId = String(customerId).replace(/[^a-z0-9:_-]/gi, "_");
+    const custRef = db.collection("customers").doc(custId);
+    const becamePaid = before?.status !== "paid" &&
+        after?.status === "paid" &&
+        !after?.postProcess?.aggPaidCounted;
+    await db.runTransaction(async (t) => {
+        const snap = await t.get(custRef);
+        const cur = (snap.exists ? snap.data() : {});
+        const addr = cust.address || {};
+        const patch = {
+            name: String(cust.name || cur?.name || ""),
+            email: email || cur?.email || null,
+            phone: phone || cur?.phone || null,
+            taxId: String(cust.taxId || cur?.taxId || "").replace(/\D/g, "") || null,
+            address: {
+                zip: String(addr.zip || cur?.address?.zip || "").replace(/\D/g, "") || null,
+                street: addr.street ?? cur?.address?.street ?? null,
+                number: addr.number ?? cur?.address?.number ?? null,
+                complement: addr.complement ?? cur?.address?.complement ?? null,
+                district: addr.district ?? cur?.address?.district ?? null,
+                city: addr.city ?? cur?.address?.city ?? null,
+                state: addr.state ?? cur?.address?.state ?? null,
+            },
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            createdAt: cur?.createdAt || firestore_1.FieldValue.serverTimestamp(),
+        };
+        if (becamePaid) {
+            patch.ordersCount = firestore_1.FieldValue.increment(1);
+            const amount = Number(after?.payment?.amount || after?.total || 0);
+            patch.totalSpent = firestore_1.FieldValue.increment(amount);
+            patch.lastOrderAt = firestore_1.FieldValue.serverTimestamp();
+        }
+        t.set(custRef, patch, { merge: true });
+        const post = { ...(after?.postProcess ?? {}), customerLinked: true, customerRef: custId };
+        if (becamePaid)
+            post.aggPaidCounted = true;
+        t.set(db.collection("orders").doc(orderId), { postProcess: post, updatedAt: firestore_1.FieldValue.serverTimestamp() }, { merge: true });
+    });
 });

@@ -42,6 +42,39 @@ if (!admin.apps.length)
 const db = admin.firestore();
 // todas as functions desta file na mesma região
 (0, v2_1.setGlobalOptions)({ region: "southamerica-east1" });
+/* ===================== C O R S ===================== */
+const ALLOWED_ORIGINS = [
+    process.env.FRONTEND_URL, // ex.: https://vendasprojetos.maltaeng1.com.br
+    "https://vendasprojetos.maltaeng1.com.br",
+    "http://localhost:5173",
+].filter(Boolean);
+/**
+ * Aplica CORS e trata preflight (OPTIONS).
+ * Retorna true se já respondeu (preflight), false para seguir o fluxo normal.
+ */
+function applyCors(req, res) {
+    const origin = req.headers.origin || "";
+    const isAllowed = ALLOWED_ORIGINS.includes(origin);
+    if (isAllowed) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+    }
+    else {
+        // Se preferir bloquear origens desconhecidas, troque por 403.
+        // res.status(403).send("Origin not allowed");
+        // return true;
+        res.setHeader("Access-Control-Allow-Origin", "*");
+    }
+    // Garante comportamento correto de caches/CDN com Vary
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.setHeader("Access-Control-Max-Age", "86400");
+    if (req.method === "OPTIONS") {
+        res.status(204).send("");
+        return true;
+    }
+    return false;
+}
 /** ID determinístico do cliente (email > phone) */
 function customerIdFrom(email, phone) {
     const e = (email ?? "").trim().toLowerCase();
@@ -75,6 +108,9 @@ async function upsertCustomerFromPayload(payload) {
  */
 exports.createMpPreferenceHttp = (0, https_1.onRequest)(async (req, res) => {
     try {
+        // CORS + preflight
+        if (applyCors(req, res))
+            return;
         if (req.method !== "POST") {
             res.status(405).send("Method Not Allowed");
             return;
