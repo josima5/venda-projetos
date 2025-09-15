@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "seed:firestore": "node scripts/seed-firestore.mjs",
-    "postinstall": "node patches/apply-firebase-extractQuerystring-fix.mjs"
+    "postinstall": "node patches/apply-firebase-extractQuerystring-fix.mjs && (chmod +x ./node_modules/.bin/vite || true)"
   },
   "dependencies": {
     "clsx": "^2.1.1",
