@@ -86,6 +86,11 @@ type CreatePrefResponse = {
   orderId: string; init_point: string; preferenceId?: string;
 };
 
+/**
+ * URL da Cloud Function que cria a preferência no Mercado Pago.
+ * Use VITE_CREATE_MP_URL no .env de produção para facilidade de troca.
+ * Ex.: VITE_CREATE_MP_URL="https://southamerica-east1-portal-malta.cloudfunctions.net/createMpPreferenceHttp"
+ */
 const CREATE_MP_URL =
   import.meta.env.VITE_CREATE_MP_URL ||
   "https://southamerica-east1-portal-malta.cloudfunctions.net/createMpPreferenceHttp";
@@ -122,7 +127,9 @@ export default function CheckoutPage() {
   useEffect(() => {
     const auth = getAuth(getApp());
     const unsub = onAuthStateChanged(auth, async (u) => {
-      if (!u) try { await signInAnonymously(auth); } catch {}
+      if (!u) {
+        try { await signInAnonymously(auth); } catch {}
+      }
       setAuthReady(true);
     });
     return () => unsub();
@@ -199,14 +206,22 @@ export default function CheckoutPage() {
         payment: { method, installments: method === "card" ? installments : 1 },
       };
 
+      // Apenas os headers necessários (evita problemas de preflight CORS)
       const resp = await fetch(CREATE_MP_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify(payload),
       });
 
-      const out: CreatePrefResponse & { error?: string; message?: string; cause?: any } =
-        await resp.json();
+      // o backend sempre responde JSON; mas protegemos caso venha vazio/HTML por erro
+      let out: CreatePrefResponse & { error?: string; message?: string; cause?: any };
+      const text = await resp.text();
+      try { out = JSON.parse(text); }
+      catch { throw new Error(text || "Falha ao criar preferência (resposta inválida)"); }
+
       if (!resp.ok) {
         const details = out?.cause ? `\n• cause: ${JSON.stringify(out.cause)}` : "";
         throw new Error(`${out?.message || out?.error || "Falha ao criar preferência"}${details}`);
@@ -219,6 +234,7 @@ export default function CheckoutPage() {
         opened = !!(w && !w.closed);
       }
 
+      // este e-mail é complementar; o backend já agenda e-mails no gatilho
       try {
         await sendOrderConfirmationEmail({
           orderId,

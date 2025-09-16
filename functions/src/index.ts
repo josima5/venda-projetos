@@ -97,14 +97,34 @@ function splitBRPhone(raw?: string) {
   return { area_code: clean.slice(0, 2), number: clean.slice(2) };
 }
 
+/* ===== CORS corrigido (normalização + eco de headers do preflight) ===== */
+function normalizeOrigin(u: string): string | null {
+  try {
+    const url = new URL(u);
+    return `${url.protocol}//${url.host}`; // sem path e sem barra no final
+  } catch {
+    return String(u || "").replace(/\/+$/, "") || null;
+  }
+}
+
 /** CORS com opção de credentials (evita wildcard quando há credenciais) */
 function setCors(req: any, res: any, allowedOrigins: string[], withCredentials = false): boolean {
-  const origin = String(req.headers.origin || "");
-  const allow = allowedOrigins.includes(origin) ? origin : null;
+  const reqOrigin = String(req.headers.origin || "");
+  const reqOriginNorm = normalizeOrigin(reqOrigin);
+
+  const normalizedAllowed = allowedOrigins
+    .map(normalizeOrigin)
+    .filter(Boolean) as string[];
+
+  const allow = normalizedAllowed.find(o => o === reqOriginNorm) || null;
 
   if (!allow) {
-    // mais seguro bloquear do que cair em "*"
     res.set("Vary", "Origin");
+    // Em preflight, responda 204 para não gerar erro no console; o POST real será bloqueado.
+    if (req.method === "OPTIONS") {
+      res.status(204).end();
+      return true;
+    }
     res.status(403).send("Origin not allowed");
     return true;
   }
@@ -112,8 +132,13 @@ function setCors(req: any, res: any, allowedOrigins: string[], withCredentials =
   res.set("Access-Control-Allow-Origin", allow);
   res.set("Vary", "Origin");
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  // ecoa exatamente os headers solicitados no preflight (ou usa um padrão)
+  const reqHdrs = String(req.headers["access-control-request-headers"] || "").toLowerCase();
+  res.set("Access-Control-Allow-Headers", reqHdrs || "content-type, authorization");
+
   if (withCredentials) res.set("Access-Control-Allow-Credentials", "true");
+  res.set("Access-Control-Max-Age", "86400");
 
   if (req.method === "OPTIONS") { res.status(204).end(); return true; }
   return false;
